@@ -99,10 +99,10 @@ def _configurar_logger():
         manejador = logging.StreamHandler(sys.stderr)
 
         #formato de cada linea: fecha y hora/ nivel/ mensaje
-        formato = logging.Formatter("%(asctime)s | %(levelname)-7s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-        manejador.setFormatter(formato) # se asocia el formato al manejador
-        logger.addHandler(manejador)    # se asocia el manejador al logger
-        return logger
+    formato = logging.Formatter("%(asctime)s | %(levelname)-7s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    manejador.setFormatter(formato) # se asocia el formato al manejador
+    logger.addHandler(manejador)    # se asocia el manejador al logger
+    return logger
 
 # logger global del módulo (se crea al importar el archivo).
 _logger = _configurar_logger()
