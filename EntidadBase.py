@@ -16,7 +16,7 @@ class ErrorSoftwareFJ(Exception):
 
     def __str__(self):
         # al imprimir la excepción se muestra: [CODIGO] mensaje
-        return f"[{self.CODIGO}]{self.mensaje}"
+        return f"[{self.CODIGO}] {self.mensaje}"
 
 class ErrorValidacion(ErrorSoftwareFJ):
     # Error generico de validación de datos (agrupa los errores de datos inválidos).
