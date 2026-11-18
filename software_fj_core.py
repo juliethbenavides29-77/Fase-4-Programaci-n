@@ -189,3 +189,140 @@ class EntidadBase(ABC):
     def __str__(self):
         # Al hacer print(entidad) se muestra su descripción.
         return self.describir()
+
+#===========================================================================================================================================================================
+# CLASE CLIENTE
+#=====================================================================================================================================================================================
+# clase Cliente con validaciones robustas y encapsulación de datos personales
+class Cliente(EntidadBase):
+    # Cliente de Software FJ. Hereda de EntidadBase (id y fecha de creación).
+
+    # Familia de numeración de ids: Cliente #1, Cliente #2, 
+    FAMILIA_ID = "cliente"
+
+    # Patrones de validación (atributos de clase, compartidos por todos).
+    # Nombre: solo letras (con tildes/ñ), espacios y apóstrofe; 3 a 60 caracteres.
+    _PATRON_NOMBRE = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' ]{3,60}$")
+    # Correo: formato general usuario@dominio.ext
+    _PATRON_CORREO = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+    # Teléfono celular colombiano: 10 dígitos que empiezan por 3.
+    _PATRON_TELEFONO = re.compile(r"^3\d{9}$")
+    # Documento: solo dígitos, entre 6 y 12.
+    _PATRON_DOCUMENTO = re.compile(r"^\d{6,12}$")
+
+    def __init__(self, nombre=None, documento=None, correo=None, telefono=None):
+        # ---  Parámetros faltantes -------------------------------------------
+        # Se arma un diccionario con los datos recibidos para revisarlos juntos.
+        recibidos = {"nombre": nombre, "documento": documento,
+                     "correo": correo, "telefono": telefono}
+        # Un dato "falta" si es None o si es un texto vacío / solo espacios.
+        faltantes = [campo for campo, valor in recibidos.items()
+                     if valor is None or (isinstance(valor, str) and not valor.strip())]
+        if faltantes:
+            # Se lanza la excepción personalizada indicando qué campos faltan.
+            raise ParametroFaltanteError(
+                f"Faltan datos obligatorios del cliente: {', '.join(faltantes)}.")
+
+        # --- Validación de cada dato (try/except con ENCADENAMIENTO) --------
+        try:
+            # Cada asignación pasa por el setter correspondiente, que valida.
+            self.nombre = nombre
+            self.documento = documento
+            self.correo = correo
+            self.telefono = telefono
+        except ClienteInvalidoError as error_original:
+            # ENCADENAMIENTO: se lanza un error más general ("no se pudo crear
+            # el cliente") conservando el original con `from error_original`.
+            raise ClienteInvalidoError(
+                f"No se pudo crear el cliente: {error_original.mensaje}"
+            ) from error_original
+
+        # --- Lista interna: historial de reservas (ids) ---------------------
+        self.__historial_reservas = []
+
+        # ---  Solo si todo fue válido se genera el id de la entidad ----------
+        super().__init__()
+        registrar_evento(f"Cliente creado: id={self.id}, nombre={self.nombre}")
+
+    # ======================= Propiedades con validación ========================
+    @property
+    def nombre(self):
+        """Nombre del cliente (lectura)."""
+        return self.__nombre
+
+    @nombre.setter
+    def nombre(self, valor):
+        """Nombre del cliente (escritura validada)."""
+        if not isinstance(valor, str):
+            raise ClienteInvalidoError("El nombre debe ser un texto.")
+        # " ".join(split()) elimina espacios repetidos o al inicio/final.
+        limpio = " ".join(valor.split())
+        if not self._PATRON_NOMBRE.match(limpio):
+            raise ClienteInvalidoError(
+                "El nombre solo puede tener letras y espacios (3 a 60 caracteres).")
+        # .title() deja cada palabra con mayúscula inicial.
+        self.__nombre = limpio.title()
+
+    @property
+    def documento(self):
+        """Número de documento (lectura)."""
+        return self.__documento
+
+    @documento.setter
+    def documento(self, valor):
+        """Número de documento (escritura validada)."""
+        # bool es subclase de int en Python; se rechaza explícitamente.
+        if isinstance(valor, bool) or not isinstance(valor, (int, str)):
+            raise ClienteInvalidoError("El documento debe ser un número o un texto numérico.")
+        texto = str(valor).strip()          # Se trabaja siempre como texto
+        if not self._PATRON_DOCUMENTO.match(texto):
+            raise ClienteInvalidoError("El documento debe tener entre 6 y 12 dígitos.")
+        self.__documento = texto
+
+    @property
+    def correo(self):
+        """Correo electrónico (lectura)."""
+        return self.__correo
+
+    @correo.setter
+    def correo(self, valor):
+        """Correo electrónico (escritura validada)."""
+        if not isinstance(valor, str) or not self._PATRON_CORREO.match(valor.strip()):
+            raise ClienteInvalidoError("El correo electrónico no tiene un formato válido.")
+        self.__correo = valor.strip().lower()
+
+    @property
+    def telefono(self):
+        """Teléfono (lectura)."""
+        return self.__telefono
+
+    @telefono.setter
+    def telefono(self, valor):
+        """Teléfono (escritura validada)."""
+        texto = str(valor).strip() if valor is not None else ""
+        if not self._PATRON_TELEFONO.match(texto):
+            raise ClienteInvalidoError(
+                "El teléfono debe ser un celular colombiano de 10 dígitos (inicia en 3).")
+        self.__telefono = texto
+
+    # ======================= Historial (lista interna) =========================
+    @property
+    def historial_reservas(self):
+        """Devuelve una COPIA inmutable (tupla) del historial: la lista interna
+        no se puede modificar desde fuera (encapsulación)."""
+        return tuple(self.__historial_reservas)
+
+    def agregar_al_historial(self, id_reserva):
+        """Agrega el id de una reserva al historial del cliente."""
+        self.__historial_reservas.append(id_reserva)
+
+    # ======================= Protección de datos personales ====================
+    def documento_enmascarado(self):
+        """Devuelve el documento ocultando todo salvo los 3 últimos dígitos."""
+        return "*" * (len(self.__documento) - 3) + self.__documento[-3:]
+
+    # ======================= Método abstracto implementado =====================
+    def describir(self):
+        """Descripción pública del cliente (sin exponer el documento completo)."""
+        return (f"Cliente #{self.id} | {self.nombre} | Doc: {self.documento_enmascarado()} "
+                f"| {self.correo} | Reservas: {len(self.__historial_reservas)}")
