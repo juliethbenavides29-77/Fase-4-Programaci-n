@@ -1,4 +1,5 @@
 # Nombre: Julieth Alexandra Benavides Ortiz
+# Nombre: Luis Eduardo Vidal Hinestroza
 # Grupo: 353
 # Curso: Programación
 # Fase 4 - componente práctico 
