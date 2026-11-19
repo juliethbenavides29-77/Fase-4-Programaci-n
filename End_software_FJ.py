@@ -24,6 +24,9 @@ from software_fj_core import (
     ParametroFaltanteError,
     ServicioInvalidoError,
     ReservaInvalidaError,
+    ServicioNoDisponibleError,
+    OperacionNoPermitidaError,
+    CalculoInconsistenteError,
     formato_cop,
     registrar_evento,
 )
@@ -138,10 +141,63 @@ class Reserva(EntidadBase):
         """Costo calculado al confirmar; None mientras no se confirme."""
         return self._costo_total
 
+    # ======================= Ciclo de vida de la reserva =======================
+    def confirmar(self, impuesto=0.0, descuento=0.0):
+        """Confirma la reserva, verifica disponibilidad y calcula el costo total."""
+        # Solo se puede confirmar una reserva que todavía está pendiente.
+        if self._estado != EstadoReserva.PENDIENTE:
+            raise OperacionNoPermitidaError(
+                f"No se puede confirmar una reserva en estado {self._estado.value}."
+            )
+
+        # El servicio debe estar disponible en el momento de confirmar.
+        # Si no lo está, se lanza ServicioNoDisponibleError.
+        self._servicio.verificar_disponibilidad()
+
+        # Se calcula el costo usando la variante sobrecargada del servicio.
+        # Puede lanzar CalculoInconsistenteError si el impuesto o el descuento
+        # están fuera de los límites permitidos.
+        costo = self._servicio.calcular_costo(
+            self._duracion, impuesto=impuesto, descuento=descuento
+        )
+
+        # Solo si todo salió bien se actualiza el estado y el costo.
+        self._costo_total = costo
+        self._estado = EstadoReserva.CONFIRMADA
+        self._cliente.agregar_al_historial(self.id)
+
+        registrar_evento(
+            f"Reserva #{self.id} confirmada: cliente={self._cliente.nombre}, "
+            f"servicio={self._servicio.nombre}, total={formato_cop(costo)}"
+        )
+        return costo
+
+    def cancelar(self):
+        """Cancela una reserva pendiente o confirmada."""
+        # Una reserva ya cancelada o procesada no se puede cancelar de nuevo.
+        if self._estado not in (EstadoReserva.PENDIENTE, EstadoReserva.CONFIRMADA):
+            raise OperacionNoPermitidaError(
+                f"No se puede cancelar una reserva en estado {self._estado.value}."
+            )
+
+        self._estado = EstadoReserva.CANCELADA
+        registrar_evento(f"Reserva #{self.id} cancelada.")
+
+    def procesar(self):
+        """Marca como procesada una reserva que ya fue confirmada."""
+        # Solo una reserva confirmada puede pasar al estado procesada.
+        if self._estado != EstadoReserva.CONFIRMADA:
+            raise OperacionNoPermitidaError(
+                f"No se puede procesar una reserva en estado {self._estado.value}."
+            )
+
+        self._estado = EstadoReserva.PROCESADA
+        registrar_evento(f"Reserva #{self.id} procesada.")
+
     # ======================= Se implementa el método abstracto describir() =====================
     def describir(self):
         """Devuelve un texto con los datos principales de la reserva."""
-        # Calculo de costo aun no implementado.
+        # Mientras la reserva no se confirme, el costo todavía no existe.
         if self._costo_total is None:
             costo = "falta calcular"
         else:
@@ -159,7 +215,7 @@ class Reserva(EntidadBase):
 # PROGRAMA PRINCIPAL
 #======================================================================================================================
 def main():
-    """Punto de entrada del programa. Por ahora solo valida la estructura inicial."""
+    """Ejecuta las pruebas temporales de la clase Reserva y su ciclo de vida."""
 
     # Encabezado visual del programa.
     print("=" * 90)
@@ -179,40 +235,106 @@ def main():
     print(f"  - Formato de moneda: {formato_cop(150000)}")
 
     # ======================================================================
-    # PRUEBA TEMPORAL DE LA CLASE RESERVA
-    # Esta sección se quitará cuando se implemente la simulación completa.
+    # PRUEBAS TEMPORALES
+    # Esta sección se reemplazará por la simulación completa mas adelante
     # ======================================================================
-    print("\nPrueba temporal de la clase Reserva:")
+    print("\nPruebas tempoales")
 
-    # Se crean un cliente y una sala válidos para probar la reserva.
+    # --- Preparación ------------------------------------------------------
+    # Se crean un cliente y una sala válidos para reutilizarlos en las pruebas.
     cliente_prueba = Cliente("Ana Pérez", "110788998", "ana@gmail.com", "3001234567")
     sala_prueba = ReservaSala("Sala Aurora", 10, 50000, disponible=True)
 
-    # Caso válido: 2 horas están dentro del rango permitido para una sala.
+    # --- 1. Creación de una reserva válida --------------------------------
+    print("\n1. Creación de una reserva válida")
     reserva_prueba = Reserva(cliente_prueba, sala_prueba, 2)
-    print(f"  [OK] {reserva_prueba}")
+    print(f"  [CASO VÁLIDO] {reserva_prueba}")
 
-    # Caso inválido: 99 horas exceden el máximo de la sala.
+    # --- 2. Errores de creación -------------------------------------------
+    print("\n2. Errores de creación")
+
+    # 2.1 Duración fuera del rango permitido para una sala.
     try:
         Reserva(cliente_prueba, sala_prueba, 99)
     except ReservaInvalidaError as error:
-        print(f"  [TEST DE ERROR] {error}")
+        print(f"  [CASO INVÁLIDO] {error}")
         print(f"  -> [CAUSA] {error.__cause__}")
 
-    # Caso inválido: el cliente no es un objeto Cliente.
+    # 2.2 Cliente con un tipo inválido.
     try:
         Reserva("no es un cliente", sala_prueba, 2)
     except ReservaInvalidaError as error:
-        print(f"  [TEST DE ERROR] {error}")
+        print(f"  [CASO INVÁLIDO] {error}")
 
-    # Caso inválido: falta el servicio.
+    # 2.3 Falta el servicio.
     try:
         Reserva(cliente_prueba, None, 2)
     except ParametroFaltanteError as error:
-        print(f"  [TEST DE ERROR] {error}")
+        print(f"  [CASO INVÁLIDO] {error}")
 
-    # Mensaje de cierre de esta segunda etapa.
-    print("\nPrueba de la estructura inicial y de la clase Reserva terminada.\n")
+    # --- 3. Ciclo de vida exitoso -----------------------------------------
+    print("\n3. Ciclo de vida exitoso")
+
+    # 3.1 Confirmar la reserva aplicando un impuesto del 19 %.
+    reserva_ciclo = Reserva(cliente_prueba, sala_prueba, 2)
+    costo = reserva_ciclo.confirmar(impuesto=0.19)
+
+    # 3.2 Mostrar el estado, el costo y el historial del cliente.
+    print(f"  [CASO VÁLIDO] {reserva_ciclo}")
+    print(f"  [ESTADO] {reserva_ciclo.estado.value}")
+    print(f"  [COSTO] {formato_cop(costo)}")
+    print(f"  [HISTORIAL] {list(cliente_prueba.historial_reservas)}")
+
+    # 3.3 Procesar la reserva confirmada.
+    reserva_ciclo.procesar()
+    print(f"  [ESTADO] {reserva_ciclo.estado.value}")
+
+    # --- 4. Cancelación exitosa -------------------------------------------
+    print("\n4. Cancelación exitosa")
+    reserva_cancelada = Reserva(cliente_prueba, sala_prueba, 1)
+    reserva_cancelada.cancelar()
+    print(f"  [CASO VÁLIDO] {reserva_cancelada}")
+
+    # --- 5. Errores de transición -----------------------------------------
+    print("\n5. Errores de transición")
+
+    # 5.1 Cancelar una reserva que ya fue procesada.
+    try:
+        reserva_ciclo.cancelar()
+    except OperacionNoPermitidaError as error:
+        print(f"  [CASO INVÁLIDO] {error}")
+
+    # 5.2 Cancelar dos veces la misma reserva.
+    try:
+        reserva_cancelada.cancelar()
+    except OperacionNoPermitidaError as error:
+        print(f"  [CASO INVÁLIDO] {error}")
+
+    # 5.3 Procesar una reserva que sigue pendiente.
+    reserva_pendiente = Reserva(cliente_prueba, sala_prueba, 1)
+    try:
+        reserva_pendiente.procesar()
+    except OperacionNoPermitidaError as error:
+        print(f"  [CASO INVÁLIDO] {error}")
+
+    # Error de disponibilidad ----------------------------------------
+    print("\n6. Error de disponibilidad")
+    sala_cerrada = ReservaSala("Sala Cerrada", 5, 40000, disponible=False)
+    reserva_cerrada = Reserva(cliente_prueba, sala_cerrada, 2)
+    try:
+        reserva_cerrada.confirmar()
+    except ServicioNoDisponibleError as error:
+        print(f"  [CASO INVÁLIDO] {error}")
+        print(f"  [ESTADO] {reserva_cerrada.estado.value}")
+
+    # Error de cálculo -----------------------------------------------
+    print("\n7. Error de cálculo")
+    reserva_descuento = Reserva(cliente_prueba, sala_prueba, 2)
+    try:
+        reserva_descuento.confirmar(descuento=0.80)
+    except CalculoInconsistenteError as error:
+        print(f"  [CASO INVÁLIDO] {error}")
+        print(f"  [ESTADO] {reserva_descuento.estado.value}")
 
 
 # Punto de arranque.
