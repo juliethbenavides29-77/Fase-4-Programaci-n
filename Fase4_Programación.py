@@ -644,28 +644,6 @@ class AsesoriaEspecializada(Servicio):
         estado = "disponible" if self.disponible else "NO disponible"
         return (f"[{self.TIPO}] #{self.id} {self.nombre} | {self._especialidad} "
                 f"| nivel {self._nivel} | {formato_cop(self._tarifa_base)}/hora base | {estado}")
-#======================================================================================================================
-# IMPORTACIONES
-#======================================================================================================================
-# Clases y funciones del núcleo que se usan en esta etapa.
-from software_fj_core import (
-    Cliente,
-    Servicio,
-    ReservaSala,
-    AlquilerEquipo,
-    AsesoriaEspecializada,
-    EntidadBase,
-    ErrorSoftwareFJ,
-    ParametroFaltanteError,
-    ServicioInvalidoError,
-    ReservaInvalidaError,
-    OperacionNoPermitidaError,
-    formato_cop,
-    registrar_evento,
-    registrar_error,
-)
-#======================================================================================================================
-
 
 #======================================================================================================================
 # ESTADOS DE UNA RESERVA
