@@ -13,6 +13,7 @@
 #======================================================================================================================
 # IMPORTACIONES
 #======================================================================================================================
+from collections import Counter  # Conteo de reservas por estado
 from enum import Enum  # Enumeración de los estados de una reserva
 
 # Clases y funciones del núcleo que se usan en esta etapa.
@@ -216,10 +217,11 @@ class Reserva(EntidadBase):
 #======================================================================================================================
 # FUNCION AUXILIAR PARA LA SIMULACIÓN
 #======================================================================================================================
-def ejecutar_operacion(numero, descripcion, accion):
+def ejecutar_operacion(numero, descripcion, accion, *args, **kwargs):
     """Ejecuta una operación de la simulación y controla sus errores.
 
-    Se usa try/except/else/finally para demostrar el manejo completo:
+    Recibe la acción y los argumentos que necesita. Se usa
+    try/except/else/finally para demostrar el manejo completo:
     - try: intenta ejecutar la operación.
     - except: captura errores del dominio o errores inesperados.
     - else: se ejecuta solo si no hubo error.
@@ -227,7 +229,7 @@ def ejecutar_operacion(numero, descripcion, accion):
     """
     print(f"\n[Operación {numero}] {descripcion}")
     try:
-        resultado = accion()
+        resultado = accion(*args, **kwargs)
     except ErrorSoftwareFJ as error:
         # Error propio del sistema: se registra y se muestra al usuario.
         registrar_error(f"Operación {numero} falló: {descripcion}", error)
@@ -255,7 +257,7 @@ def ejecutar_operacion(numero, descripcion, accion):
 # ACCIONES DE LA SIMULACIÓN
 #======================================================================================================================
 # Cada función encapsula una operación y se pasa a ejecutar_operacion().
-# MEJORAR CON LAMDAS
+# Se definen con def para que el flujo del programa sea más explícito.
 
 def accion_cliente_valido():
     """Crea un cliente con datos válidos (operación 1)."""
@@ -294,6 +296,32 @@ def accion_asesoria_valida():
     return AsesoriaEspecializada(
         "Asesoría en redes", "Redes", 100000, nivel="senior"
     )
+
+
+def accion_reserva_valida(cliente, servicio):
+    """Crea, confirma y procesa una reserva válida (operación 8)."""
+    reserva = Reserva(cliente, servicio, 2)
+    reserva.confirmar(impuesto=0.19)
+    print(f"  [HISTORIAL] {list(cliente.historial_reservas)}")
+    reserva.procesar()
+    return reserva
+
+
+def accion_reserva_duracion_invalida(cliente, servicio):
+    """Intenta crear una reserva con duración fuera de rango (operación 9)."""
+    return Reserva(cliente, servicio, 99)
+
+
+def accion_confirmar_reserva(reserva, impuesto=0.0, descuento=0.0):
+    """Confirma una reserva con los impuestos o descuentos indicados."""
+    return reserva.confirmar(impuesto=impuesto, descuento=descuento)
+
+
+def accion_cancelar_dos_veces(reserva):
+    """Cancela una reserva y luego intenta cancelarla otra vez (operación 11)."""
+    reserva.cancelar()
+    print(f"  [ESTADO] {reserva.estado.value}")
+    reserva.cancelar()  # Lanza OperacionNoPermitidaError
 #======================================================================================================================
 
 
@@ -301,7 +329,7 @@ def accion_asesoria_valida():
 # PROGRAMA PRINCIPAL
 #======================================================================================================================
 def main():
-    """Ejecuta la simulación de operaciones de clientes y servicios."""
+    """Ejecuta la simulación completa del sistema Software FJ."""
 
     # Encabezado visual del programa.
     print("=" * 90)
@@ -312,7 +340,7 @@ def main():
     # LISTAS INTERNAS DEL SISTEMA.
     clientes = []
     servicios = []
-    # reservas = [] 
+    reservas = [] 
 
     # ======================================================================
     # OPERACIONES CON CLIENTES
@@ -381,10 +409,86 @@ def main():
     if asesoria_valida is not None:
         servicios.append(asesoria_valida)
 
-    # Fin de la simulación.
-    print("\nOperaciones de clientes y servicios completadas.")
+    # ======================================================================
+    # OPERACIONES CON RESERVAS
+    # ======================================================================
+    print("\n--- OPERACIONES CON RESERVAS ---")
+
+    # Operación 8: reserva válida, confirmada con impuesto y procesada.
+    reserva_valida = ejecutar_operacion(
+        8,
+        "Crear, confirmar y procesar una reserva válida",
+        accion_reserva_valida,
+        cliente_valido,
+        sala_valida,
+    )
+    if reserva_valida is not None:
+        reservas.append(reserva_valida)
+
+    # Operación 9: duración fuera del rango permitido para la sala.
+    ejecutar_operacion(
+        9,
+        "Crear una reserva con duración fuera de rango",
+        accion_reserva_duracion_invalida,
+        cliente_valido,
+        sala_valida,
+    )
+
+    # Operación 10: servicio no disponible al confirmar.
+    sala_cerrada = ReservaSala("Sala Cerrada", 5, 40000, disponible=False)
+    reserva_cerrada = Reserva(cliente_valido, sala_cerrada, 2)
+    reservas.append(reserva_cerrada)
+    ejecutar_operacion(
+        10,
+        "Confirmar una reserva con servicio no disponible",
+        accion_confirmar_reserva,
+        reserva_cerrada,
+    )
+
+    # Operación 11: cancelar una reserva y volver a intentar cancelarla.
+    reserva_cancelada = Reserva(cliente_valido, sala_valida, 1)
+    reservas.append(reserva_cancelada)
+    ejecutar_operacion(
+        11,
+        "Cancelar una reserva y volver a intentar cancelarla",
+        accion_cancelar_dos_veces,
+        reserva_cancelada,
+    )
+
+    # Operación 12: descuento fuera del máximo permitido.
+    reserva_descuento = Reserva(cliente_valido, sala_valida, 2)
+    reservas.append(reserva_descuento)
+    ejecutar_operacion(
+        12,
+        "Confirmar una reserva con descuento inválido",
+        accion_confirmar_reserva,
+        reserva_descuento,
+        descuento=0.80,
+    )
+
+    # ======================================================================
+    # RESUMEN FINAL
+    # ======================================================================
+    print("\n--- RESUMEN FINAL ---")
     print(f"  Clientes registrados:  {len(clientes)}")
     print(f"  Servicios registrados: {len(servicios)}")
+    print(f"  Reservas registradas:  {len(reservas)}")
+
+    # Conteo de reservas por estado.
+    conteo_estados = Counter(reserva.estado.value for reserva in reservas)
+    print("\n  Reservas por estado:")
+    for estado in EstadoReserva:
+        print(f"    {estado.value}: {conteo_estados.get(estado.value, 0)}")
+
+    # Ingresos de reservas confirmadas o procesadas.
+    ingresos = sum(
+        reserva.costo_total
+        for reserva in reservas
+        if reserva.estado in (EstadoReserva.CONFIRMADA, EstadoReserva.PROCESADA)
+        and reserva.costo_total is not None
+    )
+    print(f"\n  Ingresos totales: {formato_cop(ingresos)}")
+    print("\nSimulación finalizada correctamente.")
 
 
 # Punto de arranque.
