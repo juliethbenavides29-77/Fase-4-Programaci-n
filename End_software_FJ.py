@@ -20,15 +20,17 @@ from software_fj_core import (
     Cliente,
     Servicio,
     ReservaSala,
+    AlquilerEquipo,
+    AsesoriaEspecializada,
     EntidadBase,
+    ErrorSoftwareFJ,
     ParametroFaltanteError,
     ServicioInvalidoError,
     ReservaInvalidaError,
-    ServicioNoDisponibleError,
     OperacionNoPermitidaError,
-    CalculoInconsistenteError,
     formato_cop,
     registrar_evento,
+    registrar_error,
 )
 #======================================================================================================================
 
@@ -212,10 +214,94 @@ class Reserva(EntidadBase):
 
 
 #======================================================================================================================
+# FUNCION AUXILIAR PARA LA SIMULACIÓN
+#======================================================================================================================
+def ejecutar_operacion(numero, descripcion, accion):
+    """Ejecuta una operación de la simulación y controla sus errores.
+
+    Se usa try/except/else/finally para demostrar el manejo completo:
+    - try: intenta ejecutar la operación.
+    - except: captura errores del dominio o errores inesperados.
+    - else: se ejecuta solo si no hubo error.
+    - finally: se ejecuta siempre y deja claro que el programa continúa.
+    """
+    print(f"\n[Operación {numero}] {descripcion}")
+    try:
+        resultado = accion()
+    except ErrorSoftwareFJ as error:
+        # Error propio del sistema: se registra y se muestra al usuario.
+        registrar_error(f"Operación {numero} falló: {descripcion}", error)
+        print(f"  [ERROR CONTROLADO] {error}")
+        if error.__cause__ is not None:
+            print(f"  [CAUSA] {error.__cause__}")
+    except Exception as error:
+        # Respaldo para cualquier error no previsto a futuro.
+        registrar_error(f"Operación {numero} falló de forma inesperada", error)
+        print(f"  [ERROR NO ESPERADO] {error}")
+    else:
+        # Solo llega aquí si la operación terminó sin lanzar excepciones.
+        registrar_evento(f"Operación {numero} completada: {descripcion}")
+        print("  [OK] Operación completada.")
+        if resultado is not None:
+            print(f"  [RESULTADO] {resultado}")
+        return resultado
+    finally:
+        # Se ejecute bien o mal, el programa sigue con la siguiente operación.
+        print("  >>> [FIN] El programa continúa con la siguiente operación.")
+#======================================================================================================================
+
+
+#======================================================================================================================
+# ACCIONES DE LA SIMULACIÓN
+#======================================================================================================================
+# Cada función encapsula una operación y se pasa a ejecutar_operacion().
+# MEJORAR CON LAMDAS
+
+def accion_cliente_valido():
+    """Crea un cliente con datos válidos (operación 1)."""
+    return Cliente("Ana Pérez", "35488998", "ana@gmail.com", "3001234567")
+
+
+def accion_cliente_correo_invalido():
+    """Intenta crear un cliente con correo inválido (operación 2)."""
+    return Cliente("Carlos Ruiz", "44345678", "correo-invalido", "3001234567")
+
+
+def accion_cliente_sin_telefono():
+    """Intenta crear un cliente sin teléfono (operación 3)."""
+    return Cliente("Laura Gómez", "67654321", "laura@gmail.com", None)
+
+
+def accion_sala_valida():
+    """Crea una sala de reuniones válida (operación 4)."""
+    return ReservaSala("Sala Aurora", 10, 50000, disponible=True)
+
+
+def accion_sala_tarifa_invalida():
+    """Intenta crear una sala con tarifa negativa (operación 5)."""
+    return ReservaSala("Sala Inválida", 8, -50000)
+
+
+def accion_alquiler_valido():
+    """Crea un alquiler de equipo válido (operación 6)."""
+    return AlquilerEquipo(
+        "Laptop Dell", "Laptop", 80000, unidades=2, seguro=True
+    )
+
+
+def accion_asesoria_valida():
+    """Crea una asesoría especializada válida (operación 7)."""
+    return AsesoriaEspecializada(
+        "Asesoría en redes", "Redes", 100000, nivel="senior"
+    )
+#======================================================================================================================
+
+
+#======================================================================================================================
 # PROGRAMA PRINCIPAL
 #======================================================================================================================
 def main():
-    """Ejecuta las pruebas temporales de la clase Reserva y su ciclo de vida."""
+    """Ejecuta la simulación de operaciones de clientes y servicios."""
 
     # Encabezado visual del programa.
     print("=" * 90)
@@ -223,118 +309,82 @@ def main():
     print("Software FJ - Fase 4")
     print("=" * 90)
 
-    # Se muestran los estados definidos para una reserva.
-    print("\nEstados de reserva disponibles:")
-    for estado in EstadoReserva:
-        print(f"  - {estado.value}")
-
-    # Verificamos si el core esta disponible mediante la importacion de las clases: Cliente, Servicio y formato_cop.
-    print("\nVerificación del núcleo:")
-    print(f"  - Cliente:  {Cliente.__name__}")
-    print(f"  - Servicio: {Servicio.__name__}")
-    print(f"  - Formato de moneda: {formato_cop(150000)}")
+    # LISTAS INTERNAS DEL SISTEMA.
+    clientes = []
+    servicios = []
+    # reservas = [] 
 
     # ======================================================================
-    # PRUEBAS TEMPORALES
-    # Esta sección se reemplazará por la simulación completa mas adelante
+    # OPERACIONES CON CLIENTES
     # ======================================================================
-    print("\nPruebas tempoales")
+    print("\n--- OPERACIONES CON CLIENTES ---")
 
-    # --- Preparación ------------------------------------------------------
-    # Se crean un cliente y una sala válidos para reutilizarlos en las pruebas.
-    cliente_prueba = Cliente("Ana Pérez", "110788998", "ana@gmail.com", "3001234567")
-    sala_prueba = ReservaSala("Sala Aurora", 10, 50000, disponible=True)
+    # Operación 1: registro válido.
+    cliente_valido = ejecutar_operacion(
+        1,
+        "Registrar un cliente con datos válidos",
+        accion_cliente_valido,
+    )
+    if cliente_valido is not None:
+        clientes.append(cliente_valido)
 
-    # --- 1. Creación de una reserva válida --------------------------------
-    print("\n1. Creación de una reserva válida")
-    reserva_prueba = Reserva(cliente_prueba, sala_prueba, 2)
-    print(f"  [CASO VÁLIDO] {reserva_prueba}")
+    # Operación 2: correo con formato inválido.
+    ejecutar_operacion(
+        2,
+        "Registrar un cliente con correo inválido",
+        accion_cliente_correo_invalido,
+    )
 
-    # --- 2. Errores de creación -------------------------------------------
-    print("\n2. Errores de creación")
+    # Operación 3: falta un dato obligatorio.
+    ejecutar_operacion(
+        3,
+        "Registrar un cliente sin teléfono",
+        accion_cliente_sin_telefono,
+    )
 
-    # 2.1 Duración fuera del rango permitido para una sala.
-    try:
-        Reserva(cliente_prueba, sala_prueba, 99)
-    except ReservaInvalidaError as error:
-        print(f"  [CASO INVÁLIDO] {error}")
-        print(f"  -> [CAUSA] {error.__cause__}")
+    # ======================================================================
+    # OPERACIONES CON SERVICIOS
+    # ======================================================================
+    print("\n--- OPERACIONES CON SERVICIOS ---")
 
-    # 2.2 Cliente con un tipo inválido.
-    try:
-        Reserva("no es un cliente", sala_prueba, 2)
-    except ReservaInvalidaError as error:
-        print(f"  [CASO INVÁLIDO] {error}")
+    # Operación 4: sala válida.
+    sala_valida = ejecutar_operacion(
+        4,
+        "Crear una sala de reuniones válida",
+        accion_sala_valida,
+    )
+    if sala_valida is not None:
+        servicios.append(sala_valida)
 
-    # 2.3 Falta el servicio.
-    try:
-        Reserva(cliente_prueba, None, 2)
-    except ParametroFaltanteError as error:
-        print(f"  [CASO INVÁLIDO] {error}")
+    # Operación 5: servicio con tarifa inválida.
+    ejecutar_operacion(
+        5,
+        "Crear una sala con tarifa negativa",
+        accion_sala_tarifa_invalida,
+    )
 
-    # --- 3. Ciclo de vida exitoso -----------------------------------------
-    print("\n3. Ciclo de vida exitoso")
+    # Operación 6: alquiler de equipo válido.
+    equipo_valido = ejecutar_operacion(
+        6,
+        "Crear un alquiler de equipo válido",
+        accion_alquiler_valido,
+    )
+    if equipo_valido is not None:
+        servicios.append(equipo_valido)
 
-    # 3.1 Confirmar la reserva aplicando un impuesto del 19 %.
-    reserva_ciclo = Reserva(cliente_prueba, sala_prueba, 2)
-    costo = reserva_ciclo.confirmar(impuesto=0.19)
+    # Operación 7: asesoría especializada válida.
+    asesoria_valida = ejecutar_operacion(
+        7,
+        "Crear una asesoría especializada válida",
+        accion_asesoria_valida,
+    )
+    if asesoria_valida is not None:
+        servicios.append(asesoria_valida)
 
-    # 3.2 Mostrar el estado, el costo y el historial del cliente.
-    print(f"  [CASO VÁLIDO] {reserva_ciclo}")
-    print(f"  [ESTADO] {reserva_ciclo.estado.value}")
-    print(f"  [COSTO] {formato_cop(costo)}")
-    print(f"  [HISTORIAL] {list(cliente_prueba.historial_reservas)}")
-
-    # 3.3 Procesar la reserva confirmada.
-    reserva_ciclo.procesar()
-    print(f"  [ESTADO] {reserva_ciclo.estado.value}")
-
-    # --- 4. Cancelación exitosa -------------------------------------------
-    print("\n4. Cancelación exitosa")
-    reserva_cancelada = Reserva(cliente_prueba, sala_prueba, 1)
-    reserva_cancelada.cancelar()
-    print(f"  [CASO VÁLIDO] {reserva_cancelada}")
-
-    # --- 5. Errores de transición -----------------------------------------
-    print("\n5. Errores de transición")
-
-    # 5.1 Cancelar una reserva que ya fue procesada.
-    try:
-        reserva_ciclo.cancelar()
-    except OperacionNoPermitidaError as error:
-        print(f"  [CASO INVÁLIDO] {error}")
-
-    # 5.2 Cancelar dos veces la misma reserva.
-    try:
-        reserva_cancelada.cancelar()
-    except OperacionNoPermitidaError as error:
-        print(f"  [CASO INVÁLIDO] {error}")
-
-    # 5.3 Procesar una reserva que sigue pendiente.
-    reserva_pendiente = Reserva(cliente_prueba, sala_prueba, 1)
-    try:
-        reserva_pendiente.procesar()
-    except OperacionNoPermitidaError as error:
-        print(f"  [CASO INVÁLIDO] {error}")
-
-    # Error de disponibilidad ----------------------------------------
-    print("\n6. Error de disponibilidad")
-    sala_cerrada = ReservaSala("Sala Cerrada", 5, 40000, disponible=False)
-    reserva_cerrada = Reserva(cliente_prueba, sala_cerrada, 2)
-    try:
-        reserva_cerrada.confirmar()
-    except ServicioNoDisponibleError as error:
-        print(f"  [CASO INVÁLIDO] {error}")
-        print(f"  [ESTADO] {reserva_cerrada.estado.value}")
-
-    # Error de cálculo -----------------------------------------------
-    print("\n7. Error de cálculo")
-    reserva_descuento = Reserva(cliente_prueba, sala_prueba, 2)
-    try:
-        reserva_descuento.confirmar(descuento=0.80)
-    except CalculoInconsistenteError as error:
-        print(f"  [CASO INVÁLIDO] {error}")
-        print(f"  [ESTADO] {reserva_descuento.estado.value}")
+    # Fin de la simulación.
+    print("\nOperaciones de clientes y servicios completadas.")
+    print(f"  Clientes registrados:  {len(clientes)}")
+    print(f"  Servicios registrados: {len(servicios)}")
 
 
 # Punto de arranque.
