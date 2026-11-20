@@ -1,3 +1,5 @@
+# Julieth Alexandra Benavides Ortiz
+# Primera parte del codigo del sistema (excepciones personalizadas, sistemas de logs, clase entidadBase, clase cliente, y clase servicios
 #======================================================================================================================
 # EXCEPCIONES PERSONALIZADAS
 #=======================================================================================================================
